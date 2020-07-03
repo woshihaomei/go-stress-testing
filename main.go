@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"go-stress-testing/model"
 	"go-stress-testing/server"
-	"runtime"
 	"strings"
 )
 
@@ -34,7 +33,7 @@ func (a *array) Set(s string) error {
 //go:generate go build main.go
 func main() {
 
-	runtime.GOMAXPROCS(1)
+	//runtime.GOMAXPROCS(1)
 
 	var (
 		concurrency uint64 // 并发数
@@ -72,7 +71,6 @@ func main() {
 	request, err := model.NewRequest(requestUrl, verify, 0, debug, path, headers, body)
 	if err != nil {
 		fmt.Printf("参数不合法 %v \n", err)
-
 		return
 	}
 

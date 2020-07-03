@@ -9,18 +9,23 @@ package server
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"go-stress-testing/AlphaProto"
 	"go-stress-testing/model"
-	"go-stress-testing/server/client"
 	"go-stress-testing/server/golink"
 	"go-stress-testing/server/statistics"
 	"go-stress-testing/server/verify"
+	"math/rand"
 	"sync"
 	"time"
+	pitayaClient "github.com/woshihaomei/pitaya/client"
 )
 
 const (
 	connectionMode = 1 // 1:顺序建立长链接 2:并发建立长链接
 )
+
+var productLine = "dev"
 
 // 注册验证器
 func init() {
@@ -58,12 +63,23 @@ func Dispose(concurrency, totalNumber uint64, request *model.Request) {
 			switch connectionMode {
 			case 1:
 				// 连接以后再启动协程
-				ws := client.NewWebSocket(request.Url)
-				err := ws.GetConn()
+				ws := pitayaClient.New(logrus.InfoLevel)
+				var err error
+
+				if productLine == "10000" {
+					err = ws.ConnectToWS("47.96.161.48:3251", "")
+				} else {
+					err = ws.ConnectToWS(":3251", "")
+				}
+
 				if err != nil {
 					fmt.Println("连接失败:", i, err)
-
 					continue
+				}else{
+					accountId := rand.Int63n(655658)
+					req := &AlphaProto.Req_ConnectorEntry{AccountId: accountId}
+					_, _ = ws.SendRequest("connector.connector.entry", AlphaProto.Serializer(req))
+					time.Sleep(time.Millisecond * 10)
 				}
 
 				go golink.WebSocket(i, ch, totalNumber, &wg, request, ws)
@@ -71,11 +87,19 @@ func Dispose(concurrency, totalNumber uint64, request *model.Request) {
 				// 并发建立长链接
 				go func(i uint64) {
 					// 连接以后再启动协程
-					ws := client.NewWebSocket(request.Url)
-					err := ws.GetConn()
+					ws := pitayaClient.New(logrus.InfoLevel)
+					var err error
+
+					if productLine == "10000" {
+						fmt.Println("DialConnector=47.96.161.48:3251")
+						err = ws.ConnectToWS("47.96.161.48:3251", "")
+					} else {
+						fmt.Println("DialConnector=:3251")
+						err = ws.ConnectToWS(":3251", "")
+					}
+
 					if err != nil {
 						fmt.Println("连接失败:", i, err)
-
 						return
 					}
 

@@ -8,12 +8,15 @@
 package golink
 
 import (
-	"fmt"
+	"github.com/woshihaomei/pitaya/conn/message"
+	"github.com/woshihaomei/pitaya/helpers"
 	"go-stress-testing/heper"
 	"go-stress-testing/model"
-	"go-stress-testing/server/client"
 	"sync"
+	"testing"
 	"time"
+	pitayaClient "github.com/woshihaomei/pitaya/client"
+	"go-stress-testing/AlphaProto"
 )
 
 const (
@@ -27,11 +30,11 @@ var (
 )
 
 func init() {
-	keepAlive = true
+	keepAlive = false
 }
 
 // web socket go link
-func WebSocket(chanId uint64, ch chan<- *model.RequestResults, totalNumber uint64, wg *sync.WaitGroup, request *model.Request, ws *client.WebSocket) {
+func WebSocket(chanId uint64, ch chan<- *model.RequestResults, totalNumber uint64, wg *sync.WaitGroup, request *model.Request, ws *pitayaClient.Client) {
 
 	defer func() {
 		wg.Done()
@@ -40,7 +43,7 @@ func WebSocket(chanId uint64, ch chan<- *model.RequestResults, totalNumber uint6
 	// fmt.Printf("启动协程 编号:%05d \n", chanId)
 
 	defer func() {
-		ws.Close()
+		ws.Disconnect()
 	}()
 
 	var (
@@ -59,6 +62,7 @@ func WebSocket(chanId uint64, ch chan<- *model.RequestResults, totalNumber uint6
 
 			// 结束条件
 			i = i + 1
+
 			if i >= totalNumber {
 				goto end
 			}
@@ -78,29 +82,30 @@ end:
 }
 
 // 请求
-func webSocketRequest(chanId uint64, ch chan<- *model.RequestResults, i uint64, request *model.Request, ws *client.WebSocket) {
+func webSocketRequest(chanId uint64, ch chan<- *model.RequestResults, i uint64, request *model.Request, ws *pitayaClient.Client) {
 
 	var (
 		startTime = time.Now()
-		isSucceed = false
+		isSucceed = true
 		errCode   = model.HttpOk
 	)
 
 	// 需要发送的数据
-	seq := fmt.Sprintf("%d_%d", chanId, i)
-	err := ws.Write([]byte(`{"seq":"` + seq + `","cmd":"ping","data":{}}`))
+	reqLogin := &AlphaProto.Req_RoleLogin{}
+	_, err := ws.SendRequest("game.role.login", AlphaProto.Serializer(reqLogin))
 	if err != nil {
+		isSucceed = false
 		errCode = model.RequestErr // 请求错误
 	} else {
 
 		// time.Sleep(1 * time.Second)
-		msg, err := ws.Read()
-		if err != nil {
-			errCode = model.ParseError
-			fmt.Println("读取数据 失败~")
-		} else {
-			// fmt.Println(msg)
-			errCode, isSucceed = request.VerifyWebSocket(request, seq, msg)
+		msg1 := helpers.ShouldEventuallyReceive(&testing.T{}, ws.IncomingMsgChan).(*message.Message)
+
+		resp := &AlphaProto.Resp_ConnectorEntry{}
+		AlphaProto.Deserializer(msg1.Data, resp)
+		if resp.ErrorCode != AlphaProto.E_ErrorCode_SUCCESS{
+			isSucceed = false
+			errCode = model.RequestErr
 		}
 	}
 
